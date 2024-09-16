@@ -1,0 +1,9 @@
+[package]
+name = "cobs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[dev-dependencies]
+fastrand = "2.1.1"
