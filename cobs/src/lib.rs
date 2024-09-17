@@ -3,7 +3,7 @@
 //! Turns an arbitary stream into a sequence of packets.  COBS is a cheap and
 //! easy mechanism to 'packetise' a stream. If sync is lost it will automatically
 //! resynchronise at the start of the next packet.
-//! 
+//!
 //! Each packet is returned in either the form of a filled `Vec<u8>` which is passed in by
 //! the caller pre-set with the maximum capacity, or as a new `Vec<u8>`. Short or over-long
 //! packets are automatically discarded and the stream re-syncronised. Statistics are
@@ -69,8 +69,8 @@ pub enum ConsumeResult {
     Complete,
 }
 
-/// Default value for sentinel byte
-const DEFAULT_SENTINEL: u8 = 0;
+/// Default value for sentinel byte (interpacket marker)
+pub const DEFAULT_SENTINEL: u8 = 0;
 
 /// Default max packet length for unencoded cobs packet
 pub const MAX_PACKET_LEN: usize = 8192;
@@ -94,14 +94,6 @@ pub enum CobsError {
     Busy,
 }
 
-impl std::error::Error for CobsError {}
-
-//impl From<std::io::Error> for CobsError {
-//fn from(e: Error) -> CobsError {
-//  CobsError::IOError(e)
-//}
-//}
-
 impl fmt::Display for CobsError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -117,6 +109,10 @@ impl fmt::Display for CobsError {
 
 impl Cobs {
     /// Create new instance of Cobs
+    ///
+    /// New instance will have zero'ed statistics, the sentinel value will be set to default and the packet
+    /// handler state will be set to be waiting for the start of a packet.
+    ///
     pub fn new() -> Cobs {
         Cobs {
             state: DecoderState::Idle,
