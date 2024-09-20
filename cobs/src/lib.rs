@@ -400,8 +400,8 @@ impl Cobs {
 
     /// Encode cobs packet into Vec
     ///
-    /// Takes an input vector and returns a COBS packet suitable to go over the line.
-    /// The input vector must be of a size that can be encoded into the output vector in the
+    /// Takes vector of input slices and returns a COBS packet suitable to go over the line.
+    /// The input vector must sum to a size that can be encoded into the output vector in the
     /// worst case. The `Cobs` instance is required so `Cobs::cobs_encode` knows what value
     /// to use for the sentinel.
     ///
@@ -415,10 +415,10 @@ impl Cobs {
     /// let encoded = vec![0x05u8, 0x11, 0x22, 0x33, 0x44, 0x00];
     /// let unencoded = vec![0x11u8, 0x22, 0x33, 0x44];
     /// let mut dec = cobs::Cobs::new();
-    /// let test_encoded = dec.cobs_encode_into_vec( &unencoded ).unwrap();
+    /// let test_encoded = dec.cobs_encode_into_vec( &vec![&unencoded] ).unwrap();
     /// assert!(encoded == test_encoded);
     ///
-    pub fn cobs_encode_into_vec(self, ip: &[u8]) -> Result<Vec<u8>, CobsError> {
+    pub fn cobs_encode_into_vec(self, ip: &Vec<&[u8]>) -> Result<Vec<u8>, CobsError> {
         let mut e = Vec::<u8>::with_capacity(MAX_ENC_PACKET_LEN);
         match self.cobs_encode(ip, &mut e) {
             Ok(_s) => Ok(e),
@@ -428,15 +428,15 @@ impl Cobs {
 
     /// Encode cobs packet
     ///
-    /// Takes an input vector and encodes it into a COBS packet suitable to go over the line.
-    /// The input vector must be of a size that can be encoded into the output vector in the
+    /// Takes a Vector of input slices and encodes them into a COBS packet suitable to go over the line.
+    /// The set of slices must sum to a size that can be encoded into the output vector in the
     /// worst case. The `Cobs` instance is required so `Cobs::cobs_encode` knows what value
     /// to use for the sentinel.
     ///
     /// # Errors
-    ///  `CobsError::ZeroLength` is returned for the case that a zero length input vector is
+    ///  `CobsError::ZeroLength` is returned for the case that a zero length set of input vectors is
     /// passed. `CobsError::Overlong` is returned for the case that it was not possible to
-    /// encode the input vector into the output vector.
+    /// encode the input vectors into the output vector.
     ///
     /// # Example
     /// ```
@@ -444,41 +444,48 @@ impl Cobs {
     /// let unencoded = vec![0x11u8, 0x22, 0x33, 0x44];
     /// let mut dec = cobs::Cobs::new();
     /// let mut v = Vec::<u8>::with_capacity(50);
-    /// let _ = dec.cobs_encode( &unencoded, &mut v ).unwrap();
+    /// let _ = dec.cobs_encode( &vec![&unencoded], &mut v ).unwrap();
     /// assert!(encoded == v);
     ///
     pub fn cobs_encode<'a>(
         self,
-        ip: &'a [u8],
+        ip: &'a Vec<&[u8]>,
         e: &'a mut Vec<u8>,
     ) -> Result<&'a mut Vec<u8>, CobsError> {
-        if ip.is_empty() {
+        /* It is quickest to check the input vectors before running the encode loop */
+        let mut enc_size = 0;
+        for inner in ip.iter() {
+            enc_size += inner.len();
+        }
+        if enc_size == 0 {
             Err(CobsError::ZeroLength)
-        } else if Self::max_possible_enc_len(ip.len()) > MAX_ENC_PACKET_LEN {
+        } else if Self::max_possible_enc_len(enc_size) > MAX_ENC_PACKET_LEN {
             Err(CobsError::Overlong)
         } else {
             let mut d: usize = 0; // Position for size pointer to end of slice
             e.push(self.sentinel); // Make room for initial stride byte
 
-            for i in ip.iter() {
-                /* Deal with case of 0xff bytes with no sentinel - start a new run */
-                if e.len() - d == 0xff {
-                    e[d] = (e.len() - d) as u8;
-                    d = e.len();
-                    e.push(self.sentinel);
-                }
+            for inner in ip.iter() {
+                for i in inner.iter() {
+                    /* Deal with case of 0xff bytes with no sentinel - start a new run */
+                    if e.len() - d == 0xff {
+                        e[d] = (e.len() - d) as u8;
+                        d = e.len();
+                        e.push(self.sentinel);
+                    }
 
-                /* Deal with case that this is a sentinel - start a new run */
-                if *i == self.sentinel {
-                    e[d] = (e.len() - d) as u8;
-                    d = e.len();
-                }
+                    /* Deal with case that this is a sentinel - start a new run */
+                    if *i == self.sentinel {
+                        e[d] = (e.len() - d) as u8;
+                        d = e.len();
+                    }
 
-                /* This appends either a data byte or a sentinel (which will be overwritten with a run length later) */
-                e.push(*i);
+                    /* This appends either a data byte or a sentinel (which will be overwritten with a run length later) */
+                    e.push(*i);
+                }
+                e[d] = (e.len() - d) as u8;
+                e.push(self.sentinel);
             }
-            e[d] = (e.len() - d) as u8;
-            e.push(self.sentinel);
             Ok(e)
         }
     }

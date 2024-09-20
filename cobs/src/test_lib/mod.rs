@@ -697,10 +697,17 @@ fn test_encode() {
 
     for t in 0..tests.len() {
         let dec = Cobs::new();
-        let r = dec.cobs_encode_into_vec(&tests[t].result).unwrap();
+        let r = dec.cobs_encode_into_vec(&vec![&tests[t].result]).unwrap();
         assert_eq!(r, tests[t].input);
         println!("Test {}: OK", t + 1);
     }
+}
+
+#[test]
+fn short_test() {
+    let c = Cobs::new();
+    let encver = c.cobs_encode_into_vec(&vec![&vec![0u8; 0]]);
+    assert_eq!(encver, Err(CobsError::ZeroLength));
 }
 
 #[test]
@@ -712,7 +719,7 @@ fn smoke_test() {
             .map(|_| fastrand::u8(0..255))
             .collect();
         let mut c = Cobs::new();
-        let encver = c.cobs_encode_into_vec(&original).unwrap();
+        let encver = c.cobs_encode_into_vec(&vec![&original]).unwrap();
         let mut dec_candidate = Vec::<u8>::with_capacity(8192);
         let _ = c.get_frame(encver.iter(), &mut dec_candidate);
 
