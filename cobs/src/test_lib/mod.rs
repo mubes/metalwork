@@ -279,13 +279,13 @@ fn wikipedia_tests() {
 
         assert_eq!(
             dec.stats(),
-            (
-                tests[n].input.len() as u64,
-                tests[n].result.len() as u64,
-                0,
-                1,
-                0
-            )
+            COBStats {
+                inbytes: tests[n].input.len() as u64,
+                goodbytes: tests[n].result.len() as u64,
+                badbytes: 0,
+                packets: 1,
+                toolong: 0
+            }
         );
     }
 }
@@ -351,13 +351,13 @@ fn check_incomplete_packet() {
     println!("{:?}", v);
     assert_eq!(
         dec.stats(),
-        (
-            test_packet.input.len() as u64,
-            0,
-            test_packet.result.len() as u64 - 1,
-            0,
-            1
-        )
+        COBStats {
+            inbytes: test_packet.input.len() as u64,
+            goodbytes: 0,
+            badbytes: test_packet.result.len() as u64 - 1,
+            packets: 0,
+            toolong: 1
+        }
     );
 }
 
@@ -379,7 +379,16 @@ fn short_packet() {
     let mut v = Vec::<u8>::with_capacity(150);
     let _ = dec.get_frame(noisetest.input.iter(), &mut v);
 
-    assert_eq!(dec.stats(), (12, 4, 3, 1, 0));
+    assert_eq!(
+        dec.stats(),
+        COBStats {
+            inbytes: 12,
+            goodbytes: 4,
+            badbytes: 3,
+            packets: 1,
+            toolong: 0
+        }
+    );
     assert_eq!(noisetest.result, v);
 }
 
@@ -434,7 +443,13 @@ fn byte_feeder() {
     assert!(v == result);
     assert_eq!(
         dec.stats(),
-        (input.len() as u64, result.len() as u64, 0, 1, 0)
+        COBStats {
+            inbytes: input.len() as u64,
+            goodbytes: result.len() as u64,
+            badbytes: 0,
+            packets: 1,
+            toolong: 0
+        }
     );
 }
 
@@ -697,7 +712,7 @@ fn test_encode() {
 
     for t in 0..tests.len() {
         let dec = Cobs::new();
-        let r = dec.cobs_encode_into_vec(&vec![&tests[t].result]).unwrap();
+        let r = dec.cobs_encode_into_vec(&[&tests[t].result[..]]).unwrap();
         assert_eq!(r, tests[t].input);
         println!("Test {}: OK", t + 1);
     }
@@ -706,7 +721,7 @@ fn test_encode() {
 #[test]
 fn short_test() {
     let c = Cobs::new();
-    let encver = c.cobs_encode_into_vec(&vec![&vec![0u8; 0]]);
+    let encver = c.cobs_encode_into_vec(&[&[]]);
     assert_eq!(encver, Err(CobsError::ZeroLength));
 }
 
@@ -719,7 +734,7 @@ fn smoke_test() {
             .map(|_| fastrand::u8(0..255))
             .collect();
         let mut c = Cobs::new();
-        let encver = c.cobs_encode_into_vec(&vec![&original]).unwrap();
+        let encver = c.cobs_encode_into_vec(&[&original[..]]).unwrap();
         let mut dec_candidate = Vec::<u8>::with_capacity(8192);
         let _ = c.get_frame(encver.iter(), &mut dec_candidate);
 

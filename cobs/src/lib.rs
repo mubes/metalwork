@@ -45,6 +45,16 @@ enum TokenResult {
     Complete,
 }
 
+#[derive(Default, Debug, Clone, Eq, Copy, PartialEq)]
+pub struct COBStats {
+    /// Statistics maintained by this decoder
+    pub inbytes: u64, // Number of bytes of input from source
+    pub goodbytes: u64, // Number of good bytes returned to layer above
+    pub badbytes: u64,  // Number of bad bytes abandoned and not returned
+    pub packets: u64,   // Number of packets returned to layer above
+    pub toolong: u64,   // Number of packets that were too long for their buffer
+}
+
 /// The COBS encoder/decoder object
 #[derive(Default, Debug, Clone, Eq, Copy, PartialEq)]
 pub struct Cobs {
@@ -52,13 +62,7 @@ pub struct Cobs {
     sentinel: u8,        // Sentinel value to be used (normally 0)
     rxc: u8,             // Reception count..how many more to go in this run
     maxcount: bool,      // Was rxc special case of 0xff?
-
-    /* Statistics maintained by this decoder */
-    inbytes: u64,   // Number of bytes of input from source
-    goodbytes: u64, // Number of good bytes returned to layer above
-    badbytes: u64,  // Number of bad bytes abandoned and not returned
-    packets: u64,   // Number of packets returned to layer above
-    toolong: u64,   // Number of packets that were too long for their buffer
+    stats: COBStats,     // Statistics
 }
 
 /// Indication of if the packet is complete based on submitting byte(s) to the packetiser
@@ -155,17 +159,11 @@ impl Cobs {
     /// let mut dec = Cobs::new();
     /// let stats = dec.stats();
     /// println!("Input Bytes={} Good Bytes={} Bad Bytes={} Packets={} Toolong={}",
-    ///           stats.0,stats.1,stats.2,stats.3,stats.4);
+    ///           stats.inbytes,stats.goodbytes,stats.badbytes,stats.packets,stats.toolong);
     ///```
     ///
-    pub fn stats(&mut self) -> (u64, u64, u64, u64, u64) {
-        (
-            self.inbytes,
-            self.goodbytes,
-            self.badbytes,
-            self.packets,
-            self.toolong,
-        )
+    pub fn stats(&self) -> COBStats {
+        self.stats
     }
 
     /// Interate through the packet assembler, returning a Vec
@@ -202,7 +200,7 @@ impl Cobs {
             Err(r) => {
                 if r == CobsError::ShortData {
                     /* Since the vector is ours there is no opportunity to extend it - its a bad frame */
-                    self.badbytes += op.len() as u64;
+                    self.stats.badbytes += op.len() as u64;
                     self.state = DecoderState::Flushing;
                 }
                 Err(r)
@@ -286,17 +284,17 @@ impl Cobs {
     /// ```
     ///
     pub fn get_byte(&mut self, c: u8, op: &mut Vec<u8>) -> Result<(), CobsError> {
-        self.inbytes += 1;
+        self.stats.inbytes += 1;
         let (val, action) = self.process_token(c);
         match action {
             /* Something went wrong - accumulate the current captured bytes and flush */
             TokenResult::Error => {
-                self.badbytes += op.len() as u64;
+                self.stats.badbytes += op.len() as u64;
                 op.clear();
             }
 
             /* We are still flushing, increment the bad bytes */
-            TokenResult::Flushing => self.badbytes += 1,
+            TokenResult::Flushing => self.stats.badbytes += 1,
 
             /* Nothing to see here, move along */
             TokenResult::NoAction => (),
@@ -306,8 +304,8 @@ impl Cobs {
                 if op.len() < op.capacity() {
                     op.push(val);
                 } else {
-                    self.badbytes += op.len() as u64;
-                    self.toolong += 1;
+                    self.stats.badbytes += op.len() as u64;
+                    self.stats.toolong += 1;
                     op.clear();
                     self.state = DecoderState::Flushing;
                 }
@@ -315,8 +313,8 @@ impl Cobs {
 
             /* This frame is complete, return it */
             TokenResult::Complete => {
-                self.packets += 1;
-                self.goodbytes += op.len() as u64;
+                self.stats.packets += 1;
+                self.stats.goodbytes += op.len() as u64;
                 return Ok(());
             }
         }
@@ -415,10 +413,10 @@ impl Cobs {
     /// let encoded = vec![0x05u8, 0x11, 0x22, 0x33, 0x44, 0x00];
     /// let unencoded = vec![0x11u8, 0x22, 0x33, 0x44];
     /// let mut dec = cobs::Cobs::new();
-    /// let test_encoded = dec.cobs_encode_into_vec( &vec![&unencoded] ).unwrap();
+    /// let test_encoded = dec.cobs_encode_into_vec( &[&unencoded[..]] ).unwrap();
     /// assert!(encoded == test_encoded);
     ///
-    pub fn cobs_encode_into_vec(self, ip: &Vec<&[u8]>) -> Result<Vec<u8>, CobsError> {
+    pub fn cobs_encode_into_vec(self, ip: &[&[u8]]) -> Result<Vec<u8>, CobsError> {
         let mut e = Vec::<u8>::with_capacity(MAX_ENC_PACKET_LEN);
         match self.cobs_encode(ip, &mut e) {
             Ok(_s) => Ok(e),
@@ -444,12 +442,12 @@ impl Cobs {
     /// let unencoded = vec![0x11u8, 0x22, 0x33, 0x44];
     /// let mut dec = cobs::Cobs::new();
     /// let mut v = Vec::<u8>::with_capacity(50);
-    /// let _ = dec.cobs_encode( &vec![&unencoded], &mut v ).unwrap();
+    /// let _ = dec.cobs_encode( &[&unencoded[..]], &mut v ).unwrap();
     /// assert!(encoded == v);
     ///
     pub fn cobs_encode<'a>(
         self,
-        ip: &'a Vec<&[u8]>,
+        ip: &'a [&[u8]],
         e: &'a mut Vec<u8>,
     ) -> Result<&'a mut Vec<u8>, CobsError> {
         /* It is quickest to check the input vectors before running the encode loop */

@@ -89,16 +89,26 @@ impl std::ops::Deref for OFlowFrame {
     }
 }
 
+/// Statistics maintained in orbflow frame processing
+#[derive(Default, Debug, Clone, Eq, Copy, PartialEq)]
+pub struct OFlowStats {
+    /* Statistics maintained by this decoder */
+    /// Number of bytes of input from source
+    inbytestotal: u64,
+    /// Number of input packets processed
+    inpackets: u64,
+    /// Number of input error packets
+    inerrpackets: u64,
+}
+
 /// The OFLOW encoder/decoder object
 ///
 /// This maintains statistics of packets encoded and decoded by the orbflow machine.
 ///
 #[derive(Default, Debug, Clone, Eq, Copy, PartialEq)]
 pub struct OFlow {
-    /* Statistics maintained by this decoder */
-    inbytestotal: u64, // Number of bytes of input from source
-    inpackets: u64,    // Number of input packets processed
-    inerrpackets: u64, // Number of input error packets
+    /* Return statistics maintained by this decoder */
+    stats: OFlowStats,
 }
 
 impl OFlow {
@@ -133,8 +143,8 @@ impl OFlow {
     /// println!("{:?}",of.stats());
     /// ```
     ///
-    pub fn stats(self) -> (u64, u64, u64) {
-        (self.inbytestotal, self.inerrpackets, self.inpackets)
+    pub fn stats(&self) -> &OFlowStats {
+        &self.stats
     }
 
     /// Decode the inner data frame within the passed orbflow vector reference
@@ -155,10 +165,10 @@ impl OFlow {
     ///
     pub fn decode(&mut self, ip: Vec<u8>) -> Result<OFlowFrame, OFlowError> {
         if ip.len() < 1 + OFlow::OVERHEAD_LEN {
-            self.inerrpackets += 1;
+            self.stats.inerrpackets += 1;
             Err(OFlowError::ShortData)
         } else if ip.len() > OFlow::MAX_ENC_PACKET_LEN {
-            self.inerrpackets += 1;
+            self.stats.inerrpackets += 1;
             Err(OFlowError::Overlong)
         } else {
             /* Create checksum */
@@ -169,12 +179,12 @@ impl OFlow {
 
             if sum & 0xff != 0 {
                 /* Checksum didn't match (i.e. sum to zero), not worth going further */
-                self.inerrpackets += 1;
+                self.stats.inerrpackets += 1;
                 Err(OFlowError::BadChecksum)
             } else {
                 /* All good, updating accounting and return the inner content */
-                self.inpackets += 1;
-                self.inbytestotal += (ip.len() - OFlow::OVERHEAD_LEN) as u64;
+                self.stats.inpackets += 1;
+                self.stats.inbytestotal += (ip.len() - OFlow::OVERHEAD_LEN) as u64;
                 Ok(OFlowFrame {
                     stream_number: ip[0],
                     inner: ip,
@@ -220,11 +230,7 @@ impl OFlow {
     /// let oflow_packet = of.encode_to_vec(42,data);
     /// ```
     ///
-    pub fn encode_to_vec(
-        &mut self,
-        stream_number: u8,
-        ip: Vec<u8>,
-    ) -> Result<Vec<u8>, OFlowError> {
+    pub fn encode_to_vec(&mut self, stream_number: u8, ip: Vec<u8>) -> Result<Vec<u8>, OFlowError> {
         if ip.is_empty() {
             Err(OFlowError::ZeroLength)
         } else if ip.len() > OFlow::MAX_PACKET_LEN {
