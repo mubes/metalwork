@@ -233,7 +233,7 @@ fn test_hw_source() {
     let mut i = ITMDecoder::new();
     let ip = vec![
         0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
-        0x05, 0x22, // Simple hardware source packet
+        0x85, 0x22, // Simple hardware source packet
         0x97, 0x11, 0x22, 0x33, 0x44, // 4 Bytes
         0xF6, 0x99, 0x12, // 2 Bytes
     ];
@@ -254,21 +254,21 @@ fn test_hw_source() {
     let g = i.get_frame(&mut v);
     assert_eq!(
         Ok(ITMFrame::Hw {
-            disc: 18,
+            disc: 2,
             data: 0x44332211
         }),
         g,
-        "Four bytes to port 18"
+        "Four bytes to port 2"
     );
 
     let g = i.get_frame(&mut v);
     assert_eq!(
         Ok(ITMFrame::Hw {
-            disc: 30,
+            disc: 14,
             data: 0x1299
         }),
         g,
-        "Two bytes to port 30"
+        "Two bytes to port 14"
     );
 }
 
@@ -351,5 +351,136 @@ fn test_xtn() {
         }),
         g,
         "Three bytes to port 2 with source"
+    );
+}
+
+#[test]
+fn test_event() {
+    let mut i = ITMDecoder::new();
+    let ip = vec![
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
+        0x05, 0x01, // CPI Wrap Event
+        0x05, 0x02, // Exc Wrap Event
+        0x05, 0x04, // Sleep Wrap Event
+        0x05, 0x08, // LSU Wrap Event
+        0x05, 0x10, // FOLD Wrap Event
+        0x05, 0x20, // POST Wrap Event
+        0x05, 0x00, // No Wrap
+        0x05, 0x3F, // All wrap
+    ];
+    let mut v = ip.iter();
+    let g = i.get_frame(&mut v);
+    assert_eq!(Ok(ITMFrame::Newsync { count: 1 }), g);
+
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::EventC {
+            cpicnt_wrapped: true,
+            exccnt_wrapped: false,
+            sleepcnt_wrapped: false,
+            lsucnt_wrapped: false,
+            foldcnt_wrapped: false,
+            postcnt_wrapped: false,
+        }),
+        g,
+        "CPI Rollover"
+    );
+    
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::EventC {
+            cpicnt_wrapped: false,
+            exccnt_wrapped: true,
+            sleepcnt_wrapped: false,
+            lsucnt_wrapped: false,
+            foldcnt_wrapped: false,
+            postcnt_wrapped: false,
+        }),
+        g,
+        "EXC Rollover"
+    );
+    
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::EventC {
+            cpicnt_wrapped: false,
+            exccnt_wrapped: false,
+            sleepcnt_wrapped: true,
+            lsucnt_wrapped: false,
+            foldcnt_wrapped: false,
+            postcnt_wrapped: false,
+        }),
+        g,
+        "SLEEP Rollover"
+    );
+    
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::EventC {
+            cpicnt_wrapped: false,
+            exccnt_wrapped: false,
+            sleepcnt_wrapped: false,
+            lsucnt_wrapped: true,
+            foldcnt_wrapped: false,
+            postcnt_wrapped: false,
+        }),
+        g,
+        "LSU Rollover"
+    );
+    
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::EventC {
+            cpicnt_wrapped: false,
+            exccnt_wrapped: false,
+            sleepcnt_wrapped: false,
+            lsucnt_wrapped: false,
+            foldcnt_wrapped: true,
+            postcnt_wrapped: false,
+        }),
+        g,
+        "FOLD Rollover"
+    );
+    
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::EventC {
+            cpicnt_wrapped: false,
+            exccnt_wrapped: false,
+            sleepcnt_wrapped: false,
+            lsucnt_wrapped: false,
+            foldcnt_wrapped: false,
+            postcnt_wrapped: true,
+        }),
+        g,
+        "POST Rollover"
+    );
+    
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::EventC {
+            cpicnt_wrapped: false,
+            exccnt_wrapped: false,
+            sleepcnt_wrapped: false,
+            lsucnt_wrapped: false,
+            foldcnt_wrapped: false,
+            postcnt_wrapped: false,
+        }),
+        g,
+        "No Rollover"
+    );
+    
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::EventC {
+            cpicnt_wrapped: true,
+            exccnt_wrapped: true,
+            sleepcnt_wrapped: true,
+            lsucnt_wrapped: true,
+            foldcnt_wrapped: true,
+            postcnt_wrapped: true,
+        }),
+        g,
+        "ALL Rollover"
     );
 }

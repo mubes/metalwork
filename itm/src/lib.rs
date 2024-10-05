@@ -79,6 +79,14 @@ pub enum ITMFrame {
     Noise {
         count: u64,
     },
+    EventC {
+        cpicnt_wrapped: bool,
+        exccnt_wrapped: bool,
+        sleepcnt_wrapped: bool,
+        lsucnt_wrapped: bool,
+        foldcnt_wrapped: bool,
+        postcnt_wrapped: bool,
+    },
 }
 
 /// Statistics about decode that are maintained
@@ -190,7 +198,7 @@ impl ITMDecoder {
     }
 
     fn token(&mut self, tok: u8) -> Option<ITMFrame> {
-        //print!("{:02x} ", tok);
+        print!("{:02x} ", tok);
         // Keep a record of last 8 bytes...these are used for checking syncs
         self.i.last_bytes = self.i.last_bytes << 8 | tok as u64;
 
@@ -212,9 +220,9 @@ impl ITMDecoder {
         //     fn token(&mut self, tok: u8, decoder: &mut ITMDecoder) -> Option<ITMFrame>
         let (newstate, retval) = self.state.token(tok, &mut self.i);
         if newstate.is_some() {
-            //print!("Transition from {:?} ", self.state);
+            print!("Transition from {:?} ", self.state);
             self.state = newstate.unwrap();
-            //println!("to {:?} ", self.state);
+            println!("to {:?} ", self.state);
         }
 
         retval
@@ -222,7 +230,7 @@ impl ITMDecoder {
 }
 
 /* Table of all states to be checked for matches from idle state. Place these in liklihood order to minimise tests */
-const STATEMATCH: [StateMatchFn; 9] = [
+const STATEMATCH: [StateMatchFn; 10] = [
     Sw::matches,
     Hw::matches,
     Lts::matches,
@@ -231,13 +239,14 @@ const STATEMATCH: [StateMatchFn; 9] = [
     Gts2::matches,
     NISync::matches,
     Xtn::matches,
+    Event::matches,
     Noise::matches,
 ];
 
 /* ---- We are idle ------------------------------------------- */
 /* (Sect D4.2 of ARM DDI 0403E)                                 */
 /* ------------------------------------------------------------ */
-#[derive(Default, Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct Idle;
 
 impl State for Idle {
@@ -259,7 +268,7 @@ impl State for Idle {
 /* ---- Unsynchronised ---------------------------------------- */
 /* (Sect D4.2.1 of ARM DDI 0403E)                               */
 /* ------------------------------------------------------------ */
-#[derive(Default, Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct Unsynced {
     last_bytes: u64,
 }
@@ -287,7 +296,7 @@ impl State for Unsynced {
 /* ---- A source instrumentation packet - SW ------------------ */
 /* (Sect D4.2.8 of ARM DDI 0403E)                               */
 /* ------------------------------------------------------------ */
-#[derive(Default, Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct Sw {
     target: u8,
     count: u8,
@@ -342,7 +351,7 @@ impl StateMatch for Sw {
 /* ---- A source instrumentation packet - HW ------------------ */
 /* (Sect D4.2.9 of ARM DDI 0403E)                               */
 /* ------------------------------------------------------------ */
-#[derive(Default, Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct Hw {
     target: u8,
     count: u8,
@@ -376,12 +385,12 @@ impl State for Hw {
 
 impl StateMatch for Hw {
     fn matches(tok: u8, _i: &mut ITMInternal) -> (Option<Box<dyn State>>, Option<ITMFrame>) {
-        if tok & 0b0000_0011 != 0 && tok & 0b0000_0100 != 0 {
+        if tok & 0b0000_0011 != 0 && tok & 0b1000_0100 == 0b1000_0100 {
             (
                 Some(Box::new(Hw {
                     target: if tok & 3 == 3 { 4 } else { tok & 3 },
                     count: 0,
-                    disc: (tok >> 3) & 0x1f,
+                    disc: (tok >> 3) & 0x0f,
                     data: 0,
                 })),
                 None,
@@ -395,7 +404,7 @@ impl StateMatch for Hw {
 /* ---------------------------------------------------------------------- */
 /* State handler for noise                                                */
 /* ---------------------------------------------------------------------- */
-#[derive(Default, Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct Noise;
 
 impl State for Noise {
@@ -436,7 +445,7 @@ impl StateMatch for Noise {
 /* ---- ISYNC packet ------------------------------------------ */
 /* (Sect D4.2.5 of ARM DDI 0403E)                               */
 /* ------------------------------------------------------------ */
-#[derive(Default, Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct NISync {
     target: u8,
     count: u8,
@@ -496,7 +505,7 @@ impl StateMatch for NISync {
 /* ---- General Extension packet ------------------------------ */
 /* (Sect D4.2.5 of ARM DDI 0403E)                               */
 /* ------------------------------------------------------------ */
-#[derive(Default, Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct Xtn {
     ex: u32,
     source: bool,
@@ -575,7 +584,7 @@ impl StateMatch for Xtn {
 /* ---- A Local Timestamp packet ------------------------------ */
 /* (Sect D4.2.4 of ARM DDI 0403E)                               */
 /* ------------------------------------------------------------ */
-#[derive(Default, Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct Lts {
     count: u8,
     ttypen: u8,
@@ -647,7 +656,7 @@ impl StateMatch for Lts {
 /* ---- Global Timestamp packet type 2 ------------------------ */
 /* (Sect D4.2.5 of ARM DDI 0403E)                               */
 /* ------------------------------------------------------------ */
-#[derive(Default, Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct Gts2 {
     count: u8,
     gts: u64,
@@ -693,7 +702,7 @@ impl StateMatch for Gts2 {
 /* ---- Global Timestamp packet type 1 ------------------------ */
 /* (Sect D4.2.5 of ARM DDI 0403E)                               */
 /* ------------------------------------------------------------ */
-#[derive(Default, Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct Gts1 {
     count: u8,
     gts: u64,
@@ -748,10 +757,43 @@ impl StateMatch for Gts1 {
     }
 }
 
+/* ---- Event packet ------------------------ */
+/*                              */
+/* ------------------------------------------------------------ */
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct Event;
+
+impl State for Event {
+    fn token(
+        &mut self,
+        tok: u8,
+        _i: &mut ITMInternal,
+    ) -> (Option<Box<dyn State>>, Option<ITMFrame>) {
+        (Some(Box::new(Idle)), Some(ITMFrame::EventC {
+            cpicnt_wrapped: tok&(1<<0)!=0,
+            exccnt_wrapped: tok&(1<<1)!=0,
+            sleepcnt_wrapped: tok&(1<<2)!=0,
+            lsucnt_wrapped: tok&(1<<3)!=0,
+            foldcnt_wrapped: tok&(1<<4)!=0,
+            postcnt_wrapped: tok&(1<<5)!=0,
+        }))
+    }
+}
+
+impl StateMatch for Event {
+    fn matches(tok: u8, _i: &mut ITMInternal) -> (Option<Box<dyn State>>, Option<ITMFrame>) {
+        if tok == 0b0000_0101 {
+            ( Some(Box::new(Event)),None )
+        } else {
+            (None, None)
+        }
+    }
+}
+
 /* ---- An overflow packet ------------------------------------ */
 /* (Sect D4.2.3 of ARM DDI 0403E)                               */
 /* ------------------------------------------------------------ */
-#[derive(Default, Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct Overflow;
 
 impl StateMatch for Overflow {
