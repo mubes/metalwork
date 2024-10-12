@@ -4,5 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-strum = "0.26"
-strum_macros = "0.26"
+bitmatch = "0.1.1"
+
+[dev-dependencies]
+fastrand = "2.1.1"

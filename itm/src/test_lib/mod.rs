@@ -7,7 +7,7 @@ fn test_sync() {
     let ip = vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x80];
 
     let g = i.get_frame(&mut ip.iter());
-    assert_eq!(Ok(ITMFrame::Newsync { count: 1 }), g);
+    assert_eq!(Ok(ITMFrame::Sync { count: 1 }), g);
 }
 
 #[test]
@@ -35,7 +35,7 @@ fn test_overflow() {
     let mut v = ip.iter();
 
     let g = i.get_frame(&mut v);
-    assert_eq!(Ok(ITMFrame::Newsync { count: 1 }), g);
+    assert_eq!(Ok(ITMFrame::Sync { count: 1 }), g);
     let g = i.get_frame(&mut v);
     assert_eq!(Ok(ITMFrame::Overflow { count: 1 }), g);
 }
@@ -47,7 +47,7 @@ fn test_local_ts_2() {
     let mut v = ip.iter();
 
     let g = i.get_frame(&mut v);
-    assert_eq!(Ok(ITMFrame::Newsync { count: 1 }), g);
+    assert_eq!(Ok(ITMFrame::Sync { count: 1 }), g);
     let g = i.get_frame(&mut v);
     assert_eq!(
         Ok(ITMFrame::Timestamp {
@@ -63,13 +63,13 @@ fn test_local_ts_1() {
     let mut i = ITMDecoder::new();
     let ip = vec![
         0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
-        0xA0, 0x85, 0x82, 0x01, // TS Type 1 value 0x4105
-        0xA0, 0x85, 0x85, 0x85, 0x85, 0x85, 0x00, // Type 1 with extra byte
+        0xD0, 0x85, 0x82, 0x01, // TS Type 1 value 0x4105
+        0xE0, 0x85, 0x85, 0x85, 0x85, 0x85, 0x00, // Type 1 with extra byte
     ];
     let mut v = ip.iter();
 
     let g = i.get_frame(&mut v);
-    assert_eq!(Ok(ITMFrame::Newsync { count: 1 }), g);
+    assert_eq!(Ok(ITMFrame::Sync { count: 1 }), g);
     let g = i.get_frame(&mut v);
     assert_eq!(
         Ok(ITMFrame::Timestamp {
@@ -81,7 +81,7 @@ fn test_local_ts_1() {
     let g = i.get_frame(&mut v);
     assert_eq!(
         Ok(ITMFrame::Timestamp {
-            ttype: TSType::TSDelayed,
+            ttype: TSType::DataDelayed,
             ts: 0xa14285
         }),
         g
@@ -100,7 +100,7 @@ fn test_gts_1() {
     ];
     let mut v = ip.iter();
     let g = i.get_frame(&mut v);
-    assert_eq!(Ok(ITMFrame::Newsync { count: 1 }), g);
+    assert_eq!(Ok(ITMFrame::Sync { count: 1 }), g);
 
     let g = i.get_frame(&mut v);
     assert_eq!(
@@ -151,7 +151,7 @@ fn test_gts_2() {
     ];
     let mut v = ip.iter();
     let g = i.get_frame(&mut v);
-    assert_eq!(Ok(ITMFrame::Newsync { count: 1 }), g);
+    assert_eq!(Ok(ITMFrame::Sync { count: 1 }), g);
 
     let g = i.get_frame(&mut v);
     assert_eq!(
@@ -185,7 +185,7 @@ fn test_gts_2() {
 }
 
 #[test]
-fn test_sw_source() {
+fn test_instrumentation_source() {
     let mut i = ITMDecoder::new();
     let ip = vec![
         0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
@@ -195,13 +195,14 @@ fn test_sw_source() {
     ];
     let mut v = ip.iter();
     let g = i.get_frame(&mut v);
-    assert_eq!(Ok(ITMFrame::Newsync { count: 1 }), g);
+    assert_eq!(Ok(ITMFrame::Sync { count: 1 }), g);
 
     let g = i.get_frame(&mut v);
     assert_eq!(
-        Ok(ITMFrame::Sw {
+        Ok(ITMFrame::Instrumentation {
             addr: 0,
-            data: 0x22
+            data: 0x22,
+            len: 1,
         }),
         g,
         "Single byte to port 0"
@@ -209,9 +210,10 @@ fn test_sw_source() {
 
     let g = i.get_frame(&mut v);
     assert_eq!(
-        Ok(ITMFrame::Sw {
+        Ok(ITMFrame::Instrumentation {
             addr: 18,
-            data: 0x44332211
+            data: 0x44332211,
+            len: 4,
         }),
         g,
         "Four bytes to port 18"
@@ -219,56 +221,13 @@ fn test_sw_source() {
 
     let g = i.get_frame(&mut v);
     assert_eq!(
-        Ok(ITMFrame::Sw {
+        Ok(ITMFrame::Instrumentation {
             addr: 30,
-            data: 0x1299
+            data: 0x1299,
+            len: 2,
         }),
         g,
         "Two bytes to port 30"
-    );
-}
-
-#[test]
-fn test_hw_source() {
-    let mut i = ITMDecoder::new();
-    let ip = vec![
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
-        0x85, 0x22, // Simple hardware source packet
-        0x97, 0x11, 0x22, 0x33, 0x44, // 4 Bytes
-        0xF6, 0x99, 0x12, // 2 Bytes
-    ];
-    let mut v = ip.iter();
-    let g = i.get_frame(&mut v);
-    assert_eq!(Ok(ITMFrame::Newsync { count: 1 }), g);
-
-    let g = i.get_frame(&mut v);
-    assert_eq!(
-        Ok(ITMFrame::Hw {
-            disc: 0,
-            data: 0x22
-        }),
-        g,
-        "Single byte to port 0"
-    );
-
-    let g = i.get_frame(&mut v);
-    assert_eq!(
-        Ok(ITMFrame::Hw {
-            disc: 2,
-            data: 0x44332211
-        }),
-        g,
-        "Four bytes to port 2"
-    );
-
-    let g = i.get_frame(&mut v);
-    assert_eq!(
-        Ok(ITMFrame::Hw {
-            disc: 14,
-            data: 0x1299
-        }),
-        g,
-        "Two bytes to port 14"
     );
 }
 
@@ -284,13 +243,14 @@ fn test_sw_page_no() {
     ];
     let mut v = ip.iter();
     let g = i.get_frame(&mut v);
-    assert_eq!(Ok(ITMFrame::Newsync { count: 1 }), g);
+    assert_eq!(Ok(ITMFrame::Sync { count: 1 }), g);
 
     let g = i.get_frame(&mut v);
     assert_eq!(
-        Ok(ITMFrame::Sw {
+        Ok(ITMFrame::Instrumentation {
             addr: 32,
-            data: 0x22
+            data: 0x22,
+            len: 1,
         }),
         g,
         "Single byte to port 0"
@@ -298,9 +258,10 @@ fn test_sw_page_no() {
 
     let g = i.get_frame(&mut v);
     assert_eq!(
-        Ok(ITMFrame::Sw {
+        Ok(ITMFrame::Instrumentation {
             addr: 224 + 18,
-            data: 0x44332211
+            data: 0x44332211,
+            len: 4,
         }),
         g,
         "Four bytes to port 242"
@@ -318,7 +279,7 @@ fn test_xtn() {
     ];
     let mut v = ip.iter();
     let g = i.get_frame(&mut v);
-    assert_eq!(Ok(ITMFrame::Newsync { count: 1 }), g);
+    assert_eq!(Ok(ITMFrame::Sync { count: 1 }), g);
 
     let g = i.get_frame(&mut v);
     assert_eq!(
@@ -370,7 +331,7 @@ fn test_event() {
     ];
     let mut v = ip.iter();
     let g = i.get_frame(&mut v);
-    assert_eq!(Ok(ITMFrame::Newsync { count: 1 }), g);
+    assert_eq!(Ok(ITMFrame::Sync { count: 1 }), g);
 
     let g = i.get_frame(&mut v);
     assert_eq!(
@@ -385,7 +346,7 @@ fn test_event() {
         g,
         "CPI Rollover"
     );
-    
+
     let g = i.get_frame(&mut v);
     assert_eq!(
         Ok(ITMFrame::EventC {
@@ -399,7 +360,7 @@ fn test_event() {
         g,
         "EXC Rollover"
     );
-    
+
     let g = i.get_frame(&mut v);
     assert_eq!(
         Ok(ITMFrame::EventC {
@@ -413,7 +374,7 @@ fn test_event() {
         g,
         "SLEEP Rollover"
     );
-    
+
     let g = i.get_frame(&mut v);
     assert_eq!(
         Ok(ITMFrame::EventC {
@@ -427,7 +388,7 @@ fn test_event() {
         g,
         "LSU Rollover"
     );
-    
+
     let g = i.get_frame(&mut v);
     assert_eq!(
         Ok(ITMFrame::EventC {
@@ -441,7 +402,7 @@ fn test_event() {
         g,
         "FOLD Rollover"
     );
-    
+
     let g = i.get_frame(&mut v);
     assert_eq!(
         Ok(ITMFrame::EventC {
@@ -455,7 +416,7 @@ fn test_event() {
         g,
         "POST Rollover"
     );
-    
+
     let g = i.get_frame(&mut v);
     assert_eq!(
         Ok(ITMFrame::EventC {
@@ -469,7 +430,7 @@ fn test_event() {
         g,
         "No Rollover"
     );
-    
+
     let g = i.get_frame(&mut v);
     assert_eq!(
         Ok(ITMFrame::EventC {
@@ -483,4 +444,276 @@ fn test_event() {
         g,
         "ALL Rollover"
     );
+}
+
+#[test]
+fn test_pmuovf() {
+    let mut i = ITMDecoder::new();
+    let ip = vec![
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
+        0x1d, 0x42, // PMU Overflow
+    ];
+    let mut v = ip.iter();
+    let g = i.get_frame(&mut v);
+    assert_eq!(Ok(ITMFrame::Sync { count: 1 }), g);
+
+    let g = i.get_frame(&mut v);
+    assert_eq!(Ok(ITMFrame::PMUOverflow { ovf: 0x42 }), g);
+}
+
+#[test]
+fn test_exception() {
+    let mut i = ITMDecoder::new();
+    let ip = vec![
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
+        0x0e, 0x42, 0x11, // Exception 0x142, Entry
+        0x0e, 0x99, 0x20, // Exception 0x99, Exit
+        0x0e, 0x01, 0x31, // Exception 0x101, Resume
+    ];
+
+    let mut v = ip.iter();
+    let g = i.get_frame(&mut v);
+    assert_eq!(Ok(ITMFrame::Sync { count: 1 }), g);
+
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::Exception {
+            no: 0x142,
+            event: ExceptionEvent::Entry
+        }),
+        g
+    );
+
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::Exception {
+            no: 0x99,
+            event: ExceptionEvent::Exit
+        }),
+        g
+    );
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::Exception {
+            no: 0x101,
+            event: ExceptionEvent::Returned
+        }),
+        g
+    )
+}
+
+#[test]
+fn test_datatrace_match() {
+    let mut i = ITMDecoder::new();
+    let ip = vec![
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
+        0x45, 0x01, 0x75, 0x01,
+    ];
+
+    let mut v = ip.iter();
+    let g = i.get_frame(&mut v);
+    assert_eq!(Ok(ITMFrame::Sync { count: 1 }), g);
+
+    let g = i.get_frame(&mut v);
+    assert_eq!(Ok(ITMFrame::DataTraceMatch { index: 0 }), g);
+
+    let g = i.get_frame(&mut v);
+    assert_eq!(Ok(ITMFrame::DataTraceMatch { index: 3 }), g);
+}
+
+#[test]
+fn test_datatrace_pc() {
+    let mut i = ITMDecoder::new();
+    let ip = vec![
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
+        0x45, 0x40, // Short PC packet
+        0x76, 0x02, 0x43, // Medium PC packet
+        0x77, 0x02, 0x04, 0x08, 0x10, // Long PC packet
+    ];
+
+    let mut v = ip.iter();
+    let g = i.get_frame(&mut v);
+    assert_eq!(Ok(ITMFrame::Sync { count: 1 }), g);
+
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::DataTracePC {
+            index: 0,
+            addr: 0x40,
+            len: 1
+        }),
+        g
+    );
+
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::DataTracePC {
+            index: 3,
+            addr: 0x4302,
+            len: 2
+        }),
+        g
+    );
+
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::DataTracePC {
+            index: 3,
+            addr: 0x10080402,
+            len: 4
+        }),
+        g
+    );
+}
+
+#[test]
+fn test_datatrace_addr() {
+    let mut i = ITMDecoder::new();
+    let ip = vec![
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
+        0x4d, 0x40, // Short DataAddr packet
+        0x7e, 0x02, 0x43, // Medium DataAddr packet
+        0x7f, 0x02, 0x04, 0x08, 0x10, // Long DataAddr packet
+    ];
+
+    let mut v = ip.iter();
+    let g = i.get_frame(&mut v);
+    assert_eq!(Ok(ITMFrame::Sync { count: 1 }), g);
+
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::DataTraceAddr {
+            index: 0,
+            daddr: 0x40,
+            len: 1
+        }),
+        g
+    );
+
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::DataTraceAddr {
+            index: 3,
+            daddr: 0x4302,
+            len: 2
+        }),
+        g
+    );
+
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::DataTraceAddr {
+            index: 3,
+            daddr: 0x10080402,
+            len: 4
+        }),
+        g
+    );
+}
+
+#[test]
+fn test_datatrace_value() {
+    let mut i = ITMDecoder::new();
+    let ip = vec![
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
+        0x8d, 0x40, // Short, write, len=1, idx=0
+        0x96, 0x02, 0x43, // Medium
+        0xaf, 0x02, 0x04, 0x08, 0x10, // Long
+    ];
+
+    let mut v = ip.iter();
+    let g = i.get_frame(&mut v);
+    assert_eq!(Ok(ITMFrame::Sync { count: 1 }), g);
+
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::DataTraceValue {
+            index: 0,
+            addr: 0x40,
+            len: 1,
+            wnr: true
+        }),
+        g
+    );
+
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::DataTraceValue {
+            index: 1,
+            addr: 0x4302,
+            len: 2,
+            wnr: false
+        }),
+        g
+    );
+    let g = i.get_frame(&mut v);
+    assert_eq!(
+        Ok(ITMFrame::DataTraceValue {
+            index: 2,
+            addr: 0x10080402,
+            len: 4,
+            wnr: true
+        }),
+        g
+    );
+}
+#[test]
+fn test_trace_pc() {
+    let mut i = ITMDecoder::new();
+    let ip = vec![
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
+        0x15, 0x00, // Sleeping, not prohib
+        0x15, 0xff, // Sleeping, prohib
+        0x17, 0x01, 0x02, 0x03, 0x04, // Sample address
+        0x17, 0xfa, 0xfb, 0xfc, 0xfd, // Sample address
+    ];
+
+    let mut v = ip.iter();
+    let g = i.get_frame(&mut v);
+    assert_eq!(Ok(ITMFrame::Sync { count: 1 }), g);
+
+    let g = i.get_frame(&mut v);
+    assert_eq!(Ok(ITMFrame::PCSleep { prohibited: false }), g);
+
+    let g = i.get_frame(&mut v);
+    assert_eq!(Ok(ITMFrame::PCSleep { prohibited: true }), g);
+
+    let g = i.get_frame(&mut v);
+    assert_eq!(Ok(ITMFrame::PCSample { addr: 0x04030201 }), g);
+
+    let g = i.get_frame(&mut v);
+    assert_eq!(Ok(ITMFrame::PCSample { addr: 0xfdfcfbfa }), g);
+}
+
+#[test]
+fn test_futz() {
+    let mut i = ITMDecoder::new();
+    let ip = vec![
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
+    ];
+
+    let mut v = ip.iter();
+    let _ = i.get_frame(&mut v);
+    let randomv: Vec<u8> = (1..20000).map(|_| fastrand::u8(0..255)).collect();
+
+    let mut r = randomv.as_slice().iter();
+    loop {
+        let g = i.get_frame(&mut r);
+        if g.is_err() {
+            break;
+        }
+    }
+    let mut v = ip.iter().peekable();
+    let mut g = i.get_frame(&mut v);
+    println!("Last Frame:{:?}", g);
+
+    /* See if there was anything left, so this wasn't the end sync */
+    if v.peek().is_some() {
+        g = i.get_frame(&mut v);
+        println!("Very Last Frame:{:?}", g);
+    }
+
+    /* It is _possible_ there would be a sync in the regular flow, but */
+    /* given that its 6 bytes long the chance is 1 in (1/256)^6 */
+    assert_eq!(Ok(ITMFrame::Sync { count: 2 }), g);
 }

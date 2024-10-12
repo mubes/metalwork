@@ -1,0 +1,11 @@
+The contributors to this project, in alphabetic order, are;
+
+Dave Marples           dave@marples.net
+
+The C version of Orbuculum has an extensive set of contributors which
+are documented in the repository at https://github.com/orbcode/orbuculum.
+This re-implementation takes ideas and design patterns from
+that work but is a new implementation.
+
+It is under BSD licensing like its cousin and additional contributors are welcome.
+
