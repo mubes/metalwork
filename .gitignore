@@ -1,4 +1,3 @@
-/cobs/target
-/cobs/Cargo.lock
-/oflow/target
-/oflow/Cargo.lock
+target/
+Cargo.lock
+

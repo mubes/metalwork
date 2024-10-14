@@ -16,6 +16,8 @@
 
 use std::fmt;
 use std::vec::Vec;
+
+#[path="test_lib.rs"]
 mod test_lib;
 
 /// Current state of the decoder

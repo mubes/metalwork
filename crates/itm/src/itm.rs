@@ -9,6 +9,8 @@ use bitmatch::bitmatch;
 use std::default::Default;
 use std::fmt;
 use std::fmt::Debug;
+
+#[path="test_lib.rs"]
 mod test_lib;
 
 const ITM_SYNCMASK: u64 = 0xFFFFFFFFFFFF;

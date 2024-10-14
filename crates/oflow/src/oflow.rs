@@ -12,6 +12,8 @@
 
 use std::fmt;
 use std::vec::Vec;
+
+#[path="test_lib.rs"]
 mod test_lib;
 
 /// Errors from use of this crate
@@ -236,7 +238,7 @@ impl OFlow {
         } else if ip.len() > OFlow::MAX_PACKET_LEN {
             Err(OFlowError::Overlong)
         } else {
-            let op_assy = oflow_frame!(stream_number, &ip);
+            let op_assy = crate::oflow_frame!(stream_number, &ip);
             let mut constructed_frame = vec![0u8; 0];
             for o in op_assy {
                 for i in o {

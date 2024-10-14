@@ -63,6 +63,6 @@ fn create_macro_frame() {
         vec![1u8, 2, 3],
         vec![(256usize - (27 + 1 + 2 + 3)) as u8],
     ];
-    let d = oflow_frame!(27u8, &v);
+    let d = crate::oflow_frame!(27u8, &v);
     assert_eq!(opvec, d);
 }
