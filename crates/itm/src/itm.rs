@@ -10,7 +10,7 @@ use std::default::Default;
 use std::fmt;
 use std::fmt::Debug;
 
-#[path="test_lib.rs"]
+#[path = "test_lib.rs"]
 mod test_lib;
 
 const ITM_SYNCMASK: u64 = 0xFFFFFFFFFFFF;
@@ -187,19 +187,26 @@ pub struct ITMDecoder {
 
 impl Default for ITMDecoder {
     fn default() -> Self {
-        Self::new()
+        Self::new(true)
     }
 }
 
 impl ITMDecoder {
-    /// Create new instance, initially in the unsynchronised state
+    /// Create new instance, initial state is set by boolean in the call
     ///
     /// New instance will have zero'ed statistics.
     ///
-    pub fn new() -> Self {
-        ITMDecoder {
-            state: Box::new(Unsynced),
-            i: Default::default(),
+    pub fn new(start_synced: bool) -> Self {
+        if start_synced {
+            ITMDecoder {
+                state: Box::new(Idle),
+                i: Default::default(),
+            }
+        } else {
+            ITMDecoder {
+                state: Box::new(Unsynced),
+                i: Default::default(),
+            }
         }
     }
 
@@ -276,7 +283,7 @@ impl ITMDecoder {
 
     // Process single token from the stream and see if it returned a frame
     fn token(&mut self, tok: u8) -> Option<ITMFrame> {
-        print!("{:02x} ", tok);
+        //print!("{:02x} ", tok);
         // Keep a record of last 8 bytes...these are used for checking syncs
         self.i.last_bytes = self.i.last_bytes << 8 | tok as u64;
         self.i.stats.inbytestotal += 1;
@@ -297,7 +304,7 @@ impl ITMDecoder {
             self.i.page_register = 0;
             self.i.stats.inpackets += 1;
             self.state = Box::new(Idle);
-            println!("Sync");
+            //println!("Sync");
             return Some(ITMFrame::Sync {
                 count: self.i.stats.itmsync,
             });
@@ -310,9 +317,9 @@ impl ITMDecoder {
             self.i.stats.inpackets += 1;
         }
         if newstate.is_some() {
-            print!("Transition from {:?} ", self.state);
+            //print!("Transition from {:?} ", self.state);
             self.state = newstate.unwrap();
-            println!("to {:?} ", self.state);
+            //println!("to {:?} ", self.state);
         }
 
         retval

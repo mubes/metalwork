@@ -13,7 +13,7 @@
 use std::fmt;
 use std::vec::Vec;
 
-#[path="test_lib.rs"]
+#[path = "test_lib.rs"]
 mod test_lib;
 
 /// Errors from use of this crate

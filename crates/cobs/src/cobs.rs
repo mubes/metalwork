@@ -17,7 +17,7 @@
 use std::fmt;
 use std::vec::Vec;
 
-#[path="test_lib.rs"]
+#[path = "test_lib.rs"]
 mod test_lib;
 
 /// Current state of the decoder
@@ -82,7 +82,7 @@ pub const DEFAULT_SENTINEL: u8 = 0;
 /// Default max packet length for unencoded cobs packet
 pub const MAX_PACKET_LEN: usize = 8192;
 // Encoded packet has a start run length, a max of one extra byte per 254 bytes, and an end sentinel
-const MAX_ENC_PACKET_LEN: usize = 1 + MAX_PACKET_LEN + MAX_PACKET_LEN / 254 + 1;
+pub const MAX_ENC_PACKET_LEN: usize = 1 + MAX_PACKET_LEN + MAX_PACKET_LEN / 254 + 1;
 
 /// Errors from use of this crate
 #[derive(Debug, Clone, Eq, Copy, PartialEq)]
@@ -245,7 +245,9 @@ impl Cobs {
         loop {
             match iter.next() {
                 Some(t) => match self.get_byte(*t, op) {
-                    Ok(_s) => return Ok(()),
+                    Ok(_s) => {
+                        return Ok(());
+                    }
                     Err(r) => {
                         if r != CobsError::Ongoing {
                             return Err(r);

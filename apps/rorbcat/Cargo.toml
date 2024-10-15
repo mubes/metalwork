@@ -1,5 +1,5 @@
 [package]
-name = "orbcat"
+name = "rorbcat"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,3 +7,5 @@ edition = "2021"
 futures = "0.3"
 tokio = { version = "1", features = ["full"] }
 cobs = { path = "../../crates/cobs" }
+oflow = { path = "../../crates/oflow" }
+itm = { path = "../../crates/itm" }
