@@ -149,7 +149,7 @@ impl OFlow {
         &self.stats
     }
 
-    /// Decode the inner data frame within the passed orbflow vector reference
+    /// Decode the inner data frame within the passed orbflow vector
     ///
     /// Parses the input vector into a valid data frame, updating statistics appropriately.
     ///

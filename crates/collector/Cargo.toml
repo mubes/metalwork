@@ -1,0 +1,12 @@
+[package]
+name = "collector"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = "1.0"
+cobs = { path = "../../crates/cobs" }
+oflow = { path = "../../crates/oflow" }
+itm = { path = "../../crates/itm" }
+
+[dev-dependencies]

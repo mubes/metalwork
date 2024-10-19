@@ -114,6 +114,8 @@ impl fmt::Display for CobsError {
     }
 }
 
+impl std::error::Error for CobsError {}
+
 impl Cobs {
     /// Create new instance of Cobs
     ///
