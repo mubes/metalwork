@@ -1,49 +1,55 @@
 use collector::*;
 use itm::*;
-use std::io::{self, Write};
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn, LevelFilter};
+use simple_logger::SimpleLogger;
+use std::thread;
+use std::time::Duration;
 
 #[test]
 fn main() {
-    println!("Orbuculum server must be running in default config before this test");
-    println!("otherwise you will see no output.");
-    let mut collect_data = Collect::new("localhost:3402");
+    SimpleLogger::new()
+        .with_level(LevelFilter::Debug)
+        .init()
+        .expect("Could not start logger");
+    warn!("Orbuculum server must be running in default config before this test");
+    warn!("otherwise you will see no output.");
+
     let mut p = Process::new();
     loop {
-        println!("ERROR::{:?}", collect_data.collect_data(&mut p));
+        let mut collect_data = match Collect::new_collector("localhost:3402", true, 1) {
+            Ok(x) => x,
+            Err(y) => {
+                error!("{:?}", y);
+                panic!("Failed to open source");
+            }
+        };
+        error!("At main loop:{:?}", collect_data.collect_data(&mut p));
+        thread::sleep(Duration::from_secs(1));
     }
 }
 
 ///////////////////////////////////////////////////////////////////////////
 // Process individual packets
 ///////////////////////////////////////////////////////////////////////////
-struct Process {
-    am_connected: bool,
-}
+struct Process {}
 
 impl Process {
     fn new() -> Self {
-        Process {
-            am_connected: false,
-        }
+        Process {}
     }
 }
 
 impl FrameHandler for Process {
-    fn state_ind(&mut self, connected: bool) {
-        io::stdout().flush().expect("Cannot flush stdout");
-        if connected && !self.am_connected {
-            println!("Connected");
-            self.am_connected = true;
-        }
-
-        if !connected && self.am_connected {
-            println!("Disconnected");
-            self.am_connected = false;
-        }
+    fn state_ind(&self, e: &CollectError) {
+        match e {
+            CollectError::NoError => (),
+            _ => error!("At callback:{:?}", e),
+        };
     }
 
     fn process(&mut self, i: ITMFrame) -> bool {
-        println!("{:?}", i);
+        info!("{:?}", i);
         true
     }
 }

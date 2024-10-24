@@ -91,6 +91,13 @@ impl std::ops::Deref for OFlowFrame {
     }
 }
 
+impl OFlowFrame {
+    /// Get the number of the stream in this packet
+    pub fn get_stream_no(&self) -> u8 {
+        self.stream_number
+    }
+}
+
 /// Statistics maintained in orbflow frame processing
 #[derive(Default, Debug, Clone, Eq, Copy, PartialEq)]
 pub struct OFlowStats {

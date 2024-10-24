@@ -3,7 +3,7 @@ use super::*;
 
 #[test]
 fn test_sync() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x80];
 
     let g = i.get_frame(&mut ip.iter());
@@ -12,7 +12,7 @@ fn test_sync() {
 
 #[test]
 fn test_nosync() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![0x00, 0x00, 0x00, 0x00, 0x20, 0x80];
 
     let g = i.get_frame(&mut ip.iter());
@@ -21,7 +21,7 @@ fn test_nosync() {
 
 #[test]
 fn test_tpiusync() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![0x00, 0xff, 0xff, 0xff, 0x7f, 0x80];
 
     let g = i.get_frame(&mut ip.iter());
@@ -30,7 +30,7 @@ fn test_tpiusync() {
 
 #[test]
 fn test_overflow() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x70];
     let mut v = ip.iter();
 
@@ -42,7 +42,7 @@ fn test_overflow() {
 
 #[test]
 fn test_local_ts_2() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x30];
     let mut v = ip.iter();
 
@@ -60,7 +60,7 @@ fn test_local_ts_2() {
 
 #[test]
 fn test_local_ts_1() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![
         0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
         0xD0, 0x85, 0x82, 0x01, // TS Type 1 value 0x4105
@@ -90,7 +90,7 @@ fn test_local_ts_1() {
 
 #[test]
 fn test_gts_1() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![
         0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
         0x94, 0x42, // Simple short packet
@@ -142,7 +142,7 @@ fn test_gts_1() {
 
 #[test]
 fn test_gts_2() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![
         0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
         0xb4, 0x84, 0x81, 0x82, 0x83, 0x01, // 48 bit format, good packet
@@ -186,7 +186,7 @@ fn test_gts_2() {
 
 #[test]
 fn test_instrumentation_source() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![
         0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
         0x01, 0x22, // Simple software source packet
@@ -233,7 +233,7 @@ fn test_instrumentation_source() {
 
 #[test]
 fn test_sw_page_no() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![
         0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
         0x1C, // Set page 1 (Nos 32..63)
@@ -270,7 +270,7 @@ fn test_sw_page_no() {
 
 #[test]
 fn test_xtn() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![
         0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
         0x88, 0x22, // Single byte extension packet
@@ -317,7 +317,7 @@ fn test_xtn() {
 
 #[test]
 fn test_event() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![
         0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
         0x05, 0x01, // CPI Wrap Event
@@ -448,7 +448,7 @@ fn test_event() {
 
 #[test]
 fn test_pmuovf() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![
         0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
         0x1d, 0x42, // PMU Overflow
@@ -463,7 +463,7 @@ fn test_pmuovf() {
 
 #[test]
 fn test_exception() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![
         0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
         0x0e, 0x42, 0x11, // Exception 0x142, Entry
@@ -504,7 +504,7 @@ fn test_exception() {
 
 #[test]
 fn test_datatrace_match() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![
         0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
         0x45, 0x01, 0x75, 0x01,
@@ -523,7 +523,7 @@ fn test_datatrace_match() {
 
 #[test]
 fn test_datatrace_pc() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![
         0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
         0x45, 0x40, // Short PC packet
@@ -568,7 +568,7 @@ fn test_datatrace_pc() {
 
 #[test]
 fn test_datatrace_addr() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![
         0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
         0x4d, 0x40, // Short DataAddr packet
@@ -613,7 +613,7 @@ fn test_datatrace_addr() {
 
 #[test]
 fn test_datatrace_value() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![
         0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
         0x8d, 0x40, // Short, write, len=1, idx=0
@@ -659,7 +659,7 @@ fn test_datatrace_value() {
 }
 #[test]
 fn test_trace_pc() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![
         0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
         0x15, 0x00, // Sleeping, not prohib
@@ -687,7 +687,7 @@ fn test_trace_pc() {
 
 #[test]
 fn test_futz() {
-    let mut i = ITMDecoder::new();
+    let mut i = ITMDecoder::new(false);
     let ip = vec![
         0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // Sync
     ];

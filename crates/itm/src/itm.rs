@@ -25,6 +25,8 @@ pub enum ITMError {
     ShortData,
     /// Function not implemented
     Unimplemented,
+    /// Error in the processing of the frame
+    ProcessingError,
 }
 
 impl fmt::Display for ITMError {
@@ -32,6 +34,7 @@ impl fmt::Display for ITMError {
         match self {
             ITMError::ShortData => write!(f, "Packet is too short"),
             ITMError::Unimplemented => write!(f, "Unimplemented"),
+            ITMError::ProcessingError => write!(f, "Processing error"),
         }
     }
 }
@@ -194,7 +197,9 @@ impl Default for ITMDecoder {
 impl ITMDecoder {
     /// Create new instance, initial state is set by boolean in the call
     ///
-    /// New instance will have zero'ed statistics.
+    /// New instance will have zero'ed statistics. If called with 'true' then it
+    /// will start in the synced state, otherwise it will await a sync sequence
+    /// before starting decode.
     ///
     pub fn new(start_synced: bool) -> Self {
         if start_synced {
@@ -219,7 +224,7 @@ impl ITMDecoder {
     /// # Example
     /// ```
     /// use itm::ITMDecoder;
-    /// let mut i = ITMDecoder::new();
+    /// let mut i = ITMDecoder::new(true);
     /// println!("{:?}",i.stats());
     /// ```
     pub fn stats(&self) -> &ITMStats {
@@ -233,7 +238,7 @@ impl ITMDecoder {
     /// # Example
     /// ```
     /// use itm::ITMDecoder;
-    /// let mut i = ITMDecoder::new();
+    /// let mut i = ITMDecoder::new(false);
     /// i.set_context_idlen(8);
     /// ```
     pub fn set_context_idlen(&mut self, l: u8) {
@@ -259,7 +264,7 @@ impl ITMDecoder {
     /// # Example
     /// ```
     /// use itm::ITMDecoder;
-    /// let mut i = ITMDecoder::new();
+    /// let mut i = ITMDecoder::new(false);
     /// let ip = vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x80,];
     /// let mut v = ip.iter();
     /// println!("Returned frame={:?}",i.get_frame(&mut v));
@@ -279,6 +284,26 @@ impl ITMDecoder {
                 }
             }
         }
+    }
+
+    /// Force synchronisation
+    ///
+    /// Force sync for the case that no sync is available in the stream.
+    /// This will reset the itm decoder state to idle to await the next message. This can be
+    /// used when it is known that sync can be derived form other sources (e.g. lower level packetisation)
+    ///
+    ///
+    /// # Example
+    /// ```
+    /// use itm::ITMDecoder;
+    /// let mut i = ITMDecoder::new(false);
+    /// i.sync();
+    /// ```
+    ///
+    pub fn sync(&mut self) {
+        self.i.stats.itmsync += 1;
+        self.i.page_register = 0;
+        self.state = Box::new(Idle);
     }
 
     // Process single token from the stream and see if it returned a frame

@@ -346,9 +346,26 @@ fn check_incomplete_packet() {
     };
 
     let mut dec: Cobs = Cobs::new();
+
     let mut v = Vec::<u8>::with_capacity(BUFFER_CAP);
-    let v = dec.get_frame(test_packet.input.iter(), &mut v);
-    println!("{:?}", v);
+    let mut i = test_packet.input.iter();
+    let _v = dec.get_frame(&mut i, &mut v);
+
+    assert_eq!(
+        dec.stats(),
+        COBStats {
+            inbytes: BUFFER_CAP as u64 + 2,
+            goodbytes: 0,
+            badbytes: BUFFER_CAP as u64,
+            packets: 0,
+            toolong: 1
+        }
+    );
+
+    let mut v = Vec::<u8>::with_capacity(BUFFER_CAP * 3);
+    println!("{:?}", dec.stats());
+    let _v = dec.get_frame(&mut i, &mut v);
+    println!("{:?}", dec.stats());
     assert_eq!(
         dec.stats(),
         COBStats {
@@ -371,25 +388,28 @@ fn short_packet() {
     let noisetest = Test {
         result: vec![0x11, 0x22, 0x33, 0x44],
         input: vec![
-            0x05, 0x00, 0x22, 0x33, 0x44, 0x00, 0x05, 0x11, 0x22, 0x33, 0x44, 0x00,
+            0x05, 0x11, 0x22, 0x33, 0x44, 0x00, 0x05, 0x11, 0x22, 0x33, 0x00,
         ],
     };
 
     let mut dec: Cobs = Cobs::new();
     let mut v = Vec::<u8>::with_capacity(150);
-    let _ = dec.get_frame(noisetest.input.iter(), &mut v);
+    let mut p = noisetest.input.iter();
+    let _ = dec.get_frame(&mut p, &mut v);
+    assert_eq!(noisetest.result, v);
+    let _ = dec.get_frame(&mut p, &mut v);
 
     assert_eq!(
         dec.stats(),
         COBStats {
-            inbytes: 12,
+            inbytes: 11,
             goodbytes: 4,
-            badbytes: 3,
+            badbytes: 7,
             packets: 1,
             toolong: 0
         }
     );
-    assert_eq!(noisetest.result, v);
+    assert_eq!(vec![0; 0], v);
 }
 
 #[test]

@@ -99,6 +99,8 @@ pub enum CobsError {
     ZeroLength,
     /// Too busy to perform requested action
     Busy,
+    /// Generic protocol error
+    Error,
 }
 
 impl fmt::Display for CobsError {
@@ -110,6 +112,7 @@ impl fmt::Display for CobsError {
             CobsError::ShortData => write!(f, "Insuffient data to complete packet"),
             CobsError::ZeroLength => write!(f, "Zero length packet"),
             CobsError::Busy => write!(f, "Busy"),
+            CobsError::Error => write!(f, "Generic error"),
         }
     }
 }
@@ -297,6 +300,7 @@ impl Cobs {
             TokenResult::Error => {
                 self.stats.badbytes += op.len() as u64;
                 op.clear();
+                return Err(CobsError::Error);
             }
 
             /* We are still flushing, increment the bad bytes */
@@ -314,6 +318,7 @@ impl Cobs {
                     self.stats.toolong += 1;
                     op.clear();
                     self.state = DecoderState::Flushing;
+                    return Err(CobsError::Error);
                 }
             }
 

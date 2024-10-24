@@ -8,5 +8,9 @@ thiserror = "1.0"
 cobs = { path = "../../crates/cobs" }
 oflow = { path = "../../crates/oflow" }
 itm = { path = "../../crates/itm" }
+bufstream = "0.1"
+log = "0.4.17"
+constcat = "0.5.1"
 
 [dev-dependencies]
+simple_logger = "4.0"
