@@ -224,7 +224,7 @@ impl OFlow {
     /// Create an encoded orbflow vector ready for transmission or storage
     ///
     /// Orbflow frames can be constructed either as sequences of vectors using the
-    /// [`oflow_frame`] macro, or directly into a vector by this call.
+    /// `oflow_frame` macro, or directly into a vector by this call.
     ///
     /// # Errors
     ///

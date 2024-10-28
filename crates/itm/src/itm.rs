@@ -171,7 +171,6 @@ trait StateMatch {
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
 struct ITMInternal {
     last_bytes: u64,   // Sequence of last bytes received...used for sync purposes
-    page_register: u8, // Page number register
     context_idlen: u8, // Length of context ID
     timestamp: u32,    // Local timestamp last valid value
     gtimestamp: u64,   // Global timestamp last valid value
@@ -302,7 +301,6 @@ impl ITMDecoder {
     ///
     pub fn sync(&mut self) {
         self.i.stats.itmsync += 1;
-        self.i.page_register = 0;
         self.state = Box::new(Idle);
     }
 
@@ -326,7 +324,6 @@ impl ITMDecoder {
         // ---- Check for ITMSync
         if self.i.last_bytes & ITM_SYNCMASK == ITM_SYNCPATTERN {
             self.i.stats.itmsync += 1;
-            self.i.page_register = 0;
             self.i.stats.inpackets += 1;
             self.state = Box::new(Idle);
             //println!("Sync");
@@ -425,7 +422,7 @@ impl State for Instrumentation {
     fn token(
         &mut self,
         tok: u8,
-        i: &mut ITMInternal,
+        _i: &mut ITMInternal,
     ) -> (Option<Box<dyn State>>, Option<ITMFrame>) {
         if self.count <= 4 {
             self.data |= (tok as u32) << (8 * self.count);
@@ -435,7 +432,7 @@ impl State for Instrumentation {
             (
                 Some(Box::new(Idle)),
                 Some(ITMFrame::Instrumentation {
-                    addr: self.addr + i.page_register,
+                    addr: self.addr,
                     data: self.data,
                     len: self.target,
                 }),
@@ -505,13 +502,8 @@ impl State for Xtn {
 }
 
 impl StateMatch for Xtn {
-    fn matches(tok: u8, i: &mut ITMInternal) -> (Option<Box<dyn State>>, Option<ITMFrame>) {
-        if tok & 0x80 == 0 {
-            if tok & 4 != 0 {
-                /* Deal with page register case here */
-                i.page_register = 32 * ((tok >> 4) & 7);
-                (Some(Box::new(Idle)), None)
-            } else {
+    fn matches(tok: u8, _i: &mut ITMInternal) -> (Option<Box<dyn State>>, Option<ITMFrame>) {
+        if tok & 0x80 == 0 {            
                 (
                     Some(Box::new(Idle)),
                     Some(ITMFrame::Xtn {
@@ -520,7 +512,7 @@ impl StateMatch for Xtn {
                         ex: (tok >> 4) as u32 & 7,
                     }),
                 )
-            }
+            
         } else {
             (
                 Some(Box::new(Xtn {

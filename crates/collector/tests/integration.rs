@@ -17,7 +17,7 @@ fn main() {
 
     let mut p = Process::new();
     loop {
-        let mut collect_data = match Collect::new_collector("localhost:3402", true, 1) {
+        let mut collect_data = match Collect::new_collector("oflow://localhost:3402", true, 1) {
             Ok(x) => x,
             Err(y) => {
                 error!("{:?}", y);

@@ -10,7 +10,6 @@ use cobs::{Cobs, CobsError};
 use itm::*;
 use std::fs::File;
 use std::path::Path;
-
 use constcat::concat;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn, LevelFilter};
@@ -20,6 +19,9 @@ use std::io::{ErrorKind, Read};
 use std::mem;
 use std::net::TcpStream;
 
+#[path = "test_lib.rs"]
+mod test_lib;
+
 /// Prefix for an address offering oflow
 pub const OFLOW_PREFIX: &str = "oflow";
 /// Prefix for an address offering itm
@@ -28,6 +30,11 @@ pub const ITM_PREFIX: &str = "itm";
 pub const FILE_PREFIX: &str = "file";
 /// Separator for parts of a url
 pub const URL_SEPARATOR: &str = "://";
+/// Default connection address for when one isn't specified
+pub const DEFAULT_CONNECT_ADDR: &str = "localhost";
+/// Default port for when one isn't specified
+pub const DEFAULT_PORT: &str = "3402";
+const PORT_SEP: &str = ":";
 
 /// Trait any frame handler is required to implement
 pub trait FrameHandler {
@@ -83,13 +90,76 @@ pub struct Collect {
 
 impl Collect {
     // -------------------------------------------------------------------------------------
+    /// Calculate the connecting address url
+    ///
+    /// This can get slightly complicated with all of the options. The rules are;
+    ///   Return a file url if a file is specified.
+    ///   Else;
+    ///      Use the address if specified, otherwise default address
+    ///      If no port was specified in the address then add the default port
+    ///      If the protocol was specified explicitly then add that
+    ///      Else;
+    ///         If an address was provided then add ITM protocol, otherwise add OFLOW.
+    ///   Return constructed addresss
+    ///
+    /// # Example
+    /// ```
+    /// use collector::*;
+    /// println!("default URL is {}",Collect::calculate_url(&None,&None,&None));
+    /// println!("File URL is {}",Collect::calculate_url(&Some("fileexample"),&None,&None));
+    /// println!("COBS URL is {}",Collect::calculate_url(&None,&Some("example"),&Some(String::new("cobs"))));
+    /// ```
+    ///
+    pub fn calculate_url(
+        input_file: &Option<String>,
+        server: &Option<String>,
+        protocol: &Option<String>,
+    ) -> String {
+        match input_file {
+            Some(x) => {
+                /* File source, just calculate and return it */
+                concat!(FILE_PREFIX, URL_SEPARATOR).to_string() + x
+            }
+
+            None => {
+                /* Network source: Determine what the protocol frontmatter looks like. */
+                let prot = match protocol {
+                    Some(p) => p.clone(),
+                    None => {
+                        if server.is_some() {
+                            ITM_PREFIX.to_string()
+                        } else {
+                            OFLOW_PREFIX.to_string()
+                        }
+                    }
+                };
+
+                /* Get the server address, or default address if there isn't one already */
+                let mut addr = server
+                    .as_ref()
+                    .map(String::as_str)
+                    .unwrap_or(DEFAULT_CONNECT_ADDR)
+                    .to_string();
+
+                /* Add a port number if we need one */
+                if !addr.contains(PORT_SEP) {
+                    addr = addr + &PORT_SEP.to_string() + &DEFAULT_PORT.to_string();
+                };
+
+                /* Now add in the address */
+                prot + &URL_SEPARATOR.to_string() + &addr
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------------------
     /// Create new instance which will (attempt to) connect to specified address
     ///
     /// # Example
     ///
     /// ```
     /// use collector::*;
-    /// let mut collect_data = Collect::new_collector("localhost:3402",true,1);
+    /// let mut collect_data = Collect::new_collector("oflow://localhost:3402",true,1);
     /// ```
     ///
     pub fn new_collector(addr: &str, itm_sync: bool, tag: u8) -> Result<Self, CollectError> {
@@ -111,11 +181,13 @@ impl Collect {
     // -------------------------------------------------------------------------------------
     /// Collect data, calling callback with FrameHandler trait to process the returned data
     ///
+    /// This routine is called with a pre-created instance.
+    /// 
     /// # Example
     ///
     /// ```
     /// use collector::*;
-    /// let mut collect_data = Collect::new("localhost:3402");
+    /// let mut collect_data = Collect::new("oflow://localhost:3402");
     /// let mut p = Process::new();
     /// loop {
     ///     println!("ERROR::{:?}", collect_data.collect_data(&mut p));
@@ -243,9 +315,8 @@ impl Collect {
 
     // -------------------------------------------------------------------------------------
     // Open a new connection and configure it for use
-    // Returns a readwrite handle to the connection and an indication if it's ITM or OFLOW
+    // Returns a ReadWrite handle to the connection and an indication if it's ITM or OFLOW
     //
-
     fn do_open(addr: &str) -> Result<(bool, Box<dyn ReadWrite>), CollectError> {
         if let Some(oflow_addr) = addr.strip_prefix(concat!(OFLOW_PREFIX, URL_SEPARATOR)) {
             let r = TcpStream::connect(oflow_addr)?;
