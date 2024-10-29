@@ -503,16 +503,15 @@ impl State for Xtn {
 
 impl StateMatch for Xtn {
     fn matches(tok: u8, _i: &mut ITMInternal) -> (Option<Box<dyn State>>, Option<ITMFrame>) {
-        if tok & 0x80 == 0 {            
-                (
-                    Some(Box::new(Idle)),
-                    Some(ITMFrame::Xtn {
-                        source: (tok & 4) != 0,
-                        len: 0,
-                        ex: (tok >> 4) as u32 & 7,
-                    }),
-                )
-            
+        if tok & 0x80 == 0 {
+            (
+                Some(Box::new(Idle)),
+                Some(ITMFrame::Xtn {
+                    source: (tok & 4) != 0,
+                    len: 0,
+                    ex: (tok >> 4) as u32 & 7,
+                }),
+            )
         } else {
             (
                 Some(Box::new(Xtn {

@@ -143,11 +143,11 @@ impl Collect {
 
                 /* Add a port number if we need one */
                 if !addr.contains(PORT_SEP) {
-                    addr = addr + &PORT_SEP.to_string() + &DEFAULT_PORT.to_string();
+                    addr = addr + PORT_SEP + DEFAULT_PORT;
                 };
 
                 /* Now add in the address */
-                prot + &URL_SEPARATOR.to_string() + &addr
+                prot + URL_SEPARATOR + &addr
             }
         }
     }
