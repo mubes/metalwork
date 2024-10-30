@@ -2,9 +2,9 @@ use chrono::Local;
 use clap::{ArgAction, Parser};
 use collector::*;
 use constcat::concat;
-use std::collections::HashSet;
 use inline_colorization::*;
 use itm::*;
+use std::collections::HashSet;
 //use chrono::prelude::*;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn, LevelFilter};
@@ -18,9 +18,6 @@ const CHANNEL_DELIMETER: char = ',';
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    #[arg(short = 'c', long, num_args(1..), value_names=["Channel","Format"], action = clap::ArgAction::Append)]
-    /// Channel(s) and formats in form [channel,"format"]
-    channel: Vec<String>,
     #[arg(long)]
     /// Get additional information on '-c' formats
     chelp: bool,
@@ -43,15 +40,16 @@ struct Args {
     ///Character to use to trigger timestamp
     trigger: char,
     #[arg(value_parser = clap::value_parser!(i32).range(0..=511))]
-    #[arg(short = 'i', long,num_args = 0.., value_delimiter = CHANNEL_DELIMETER)]
-    /// Include specified interrupt information in output (range 0..511)
-    interrupts: Vec<i32>,
+    #[arg(short = 'i', long,num_args = 0.., value_delimiter = CHANNEL_DELIMETER,
+        help="Include interrupt information in output. Followed by values\n\
+        constrains only those interrupts to be reported (range 0..511)")]
+    interrupts: Option<Vec<i32>>,
     #[arg(short = 'n', long, default_value_t = true, action = ArgAction::SetFalse)]
     /// Enforce sync requirement for ITM
     itm_sync: bool,
     #[arg(
         short, long, value_parser = [collector::OFLOW_PREFIX,collector::ITM_PREFIX],
-        help="Protocol to communicate. Defaults to itm if -s\nis set, otherwise oflow")]
+        help="Protocol to communicate. Defaults to itm if is-s\n set, otherwise oflow")]
     /// Protocol to communicate.
     protocol: Option<String>,
     #[arg(short, long)]
@@ -63,9 +61,10 @@ struct Args {
     tag: u8,
     #[arg(
         value_enum,
-        help = "Append absolute,relative (to session start), delta, target\n\
-        Relative or target Delta to output. Note the accuracy of a, r & d\n\
-        are host dependent."
+        help = "Append absolute, relative, delta, target relative or target\n\
+        delta to output. Relative is with reference to session start.\n\
+        The accuracy of a, r & d are host dependent, R and D are target\n\
+        dependent."
     )]
     /// Add timestamp
     #[arg(short = 'T', long)]
@@ -74,9 +73,13 @@ struct Args {
     /// Verbose mode 0(errors)..4(debug)..5(trace)
     verbose: u8,
     #[arg(value_parser = clap::value_parser!(i32).range(0..=15))]
-    #[arg(short = 'x', long,num_args = 0.., value_delimiter = CHANNEL_DELIMETER)]
-    /// Include exception information in output (range 0..15)
-    exceptions: Vec<i32>,
+    #[arg(short = 'x', long,num_args = 0.., value_delimiter = CHANNEL_DELIMETER,
+        help="Include exception information in output. Followed by values\n\
+        constrains only those exceptions to be reported (range 0..15)")]
+    exceptions: Option<Vec<i32>>,
+    #[arg(num_args(1..), required=true, action = clap::ArgAction::Append)]
+    /// Channel(s) and formats in form [channel,"format"]
+    channel: Vec<String>,
 }
 
 // Option values for timestamp type
@@ -121,11 +124,30 @@ fn main() {
     .expect("Couldn't start logging");
     info!("{:?}", args);
 
-    let combined: HashSet<i32> = args
-        .exceptions
+    // === Setup interrupts and exception handling
+    //
+    // Get empty vector if exceptions weren't set on command line, full set if -x was set but not
+    // constrained to any values, or the values that were set if explicit. Note that we start at
+    // 1 and not 0 for the 'full set'. This avoids getting hit with Thread Resume messages, but
+    // these can be added explicitly if needed.
+    let ex: Vec<i32> = match &args.exceptions {
+        None => Vec::new(),
+        Some(v) if v.is_empty() => Vec::from_iter(1..=15),
+        Some(v) => v.clone(),
+    };
+
+    // Now add in the interrupts based on the same rules.
+    let combined: HashSet<i32> = ex
         .iter()
-        .cloned()
-        .chain(args.interrupts.iter().map(|x| x + 16))
+        .chain(
+            match &args.interrupts {
+                None => Vec::new(),
+                Some(v) if v.is_empty() => Vec::from_iter(0..511),
+                Some(v) => v.iter().map(|x| x + 16).collect(),
+            }
+            .iter(),
+        )
+        .copied()
         .collect();
 
     /* === Create the main processor */
@@ -185,7 +207,7 @@ struct Chan {
 // Timing related data for running process
 #[derive(Debug, Clone)]
 struct TimeTrack {
-    it: IntervalType,                // Typie of intervals to be reported
+    interval: IntervalType,          // Typie of intervals to be reported
     donefirst: bool,                 // Is this the first iteration?
     cpu_freq_div: usize,             // CPU frequency divider
     time: u64,                       // Latest calculated time from target
@@ -211,6 +233,7 @@ struct Process {
 const PATTERNS: [&str; 10] = [
     "\\n", "\\t", "\\a", "{x08}", "{x04}", "{x02}", "{i32}", "{u32}", "{unic}", "{char}",
 ];
+// ... and textual descriptions of what they are
 const DESCRIPTION: [&str; 10] = [
     "New Line",
     "Tab",
@@ -224,6 +247,7 @@ const DESCRIPTION: [&str; 10] = [
     "Legacy 8-bit character",
 ];
 
+// Names for system exceptions
 const EXNAMES: [&str; 16] = [
     "Thread",
     "Reset",
@@ -242,7 +266,9 @@ const EXNAMES: [&str; 16] = [
     "PendSV",
     "SysTick",
 ];
-const EXEVENT: [&str; 4] = ["Unknown", "Enter", "Exit", "Resume"];
+
+// Actions for system exceptions
+const EXEVENT: [&str; 4] = ["Unknown", "Entry", "Exit", "Resume"];
 
 // Output additional help for print substitutions
 fn print_chelp() {
@@ -261,17 +287,21 @@ fn print_chelp() {
     println!("             -c3,\"{{unic}}\"            : Output unicode");
 }
 
-// Main processor
+// Main processor loop
 impl Process {
     // Create a new process with default values
-    fn new(trigger: char, interval: IntervalType, cpu_freq_div: usize, exlist: HashSet<i32>) -> Self {
+    fn new(
+        trigger: char,
+        interval: IntervalType,
+        cpu_freq_div: usize,
+        exlist: HashSet<i32>,
+    ) -> Self {
         Process {
             ac: AhoCorasick::new(PATTERNS).unwrap(),
             trigger,
-
+            exlist,
             storing: false,
             armed: false,
-            exlist,
 
             channel: vec![
                 Chan {
@@ -281,7 +311,7 @@ impl Process {
                 MAX_CHANNELS as usize
             ],
             t: TimeTrack {
-                it: interval,
+                interval,
                 cpu_freq_div,
                 old_dt: Local::now(),
                 donefirst: false,
@@ -297,7 +327,9 @@ impl Process {
             let parts: Vec<&str> = ip.split(CHANNEL_DELIMETER).collect();
             /* Always expect a channel and format */
             if 2 != parts.len() {
-                return Err(format!("Badly formed channel expression [{ip:}]"));
+                return Err(format!(
+                    "Badly formed channel expression [{ip:}], should be [channel,\"format\"]"
+                ));
             }
             /* Grab the channel number */
             let ch: u8 = match parts[0].parse() {
@@ -323,24 +355,27 @@ impl Process {
     fn check_exception(t: &mut TimeTrack, no: u16, event: ExceptionEvent) -> String {
         if no < 16 {
             format!(
-                "{}{color_bright_blue}HWEVENT_SYSTEM_EXCEPTION event {} type {}{color_reset}",
+                "{}{color_bright_blue}EXCEPTION {} {}{color_reset}",
                 Process::check_time_trigger(t),
+                EXNAMES[no as usize],
                 EXEVENT[event as usize],
-                EXNAMES[no as usize]
             )
         } else {
             format!(
-                "{}{color_bright_blue}HWEVENT_INTERRUPT_EXCEPTION event {} external interrupt {}{color_reset}",Process::check_time_trigger(t),
-                EXEVENT[event as usize], no as usize - 16
+                "{}{color_bright_blue}INTERRUPT {} {}{color_reset}",
+                Process::check_time_trigger(t),
+                no as usize - 16,
+                EXEVENT[event as usize],
             )
         }
     }
 
     // Check if time trigger occured, and output formatted time if appropriate
     fn check_time_trigger(t: &mut TimeTrack) -> String {
-        let mut r = String::from("");
+        let mut r = String::new();
 
-        match t.it {
+        match t.interval {
+            // -------------------------------------------------------------------------
             IntervalType::Absolute => {
                 let dt = Local::now();
                 r = format!(
@@ -348,6 +383,7 @@ impl Process {
                     dt.format("%Y-%m-%d %H:%M:%S%.3f")
                 );
             }
+            // -------------------------------------------------------------------------
             IntervalType::Relative => {
                 if !t.donefirst {
                     r = format!("{color_bright_yellow}       Relative|{color_reset}");
@@ -361,6 +397,7 @@ impl Process {
                     );
                 }
             }
+            // -------------------------------------------------------------------------
             IntervalType::Delta => {
                 if !t.donefirst {
                     r = format!("{color_bright_yellow}          Delta|{color_reset}");
@@ -375,6 +412,7 @@ impl Process {
                     );
                 }
             }
+            // -------------------------------------------------------------------------
             IntervalType::TargetDelta => {
                 if !t.donefirst {
                     r = format!("{color_bright_yellow}   Target Delta|{color_reset}");
@@ -392,9 +430,9 @@ impl Process {
                         t.time - t.old_time
                     );
                 }
-
                 t.old_time = t.time;
             }
+            // -------------------------------------------------------------------------
             IntervalType::TargetRelative => {
                 if !t.donefirst {
                     r = format!("{color_bright_yellow}Target Relative|{color_reset}");
@@ -415,6 +453,8 @@ impl Process {
         t.donefirst = true;
         r
     }
+    
+    
     fn process_internal(&mut self, i: ITMFrame) -> bool {
         match i {
             // === Timestamp, update our records

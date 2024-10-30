@@ -7,17 +7,17 @@
 //!
 
 use cobs::{Cobs, CobsError};
-use itm::*;
-use std::fs::File;
-use std::path::Path;
 use constcat::concat;
+use itm::*;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn, LevelFilter};
 use oflow::{OFlow, OFlowError};
 use std::fmt::Debug;
+use std::fs::File;
 use std::io::{ErrorKind, Read};
 use std::mem;
 use std::net::TcpStream;
+use std::path::Path;
 
 #[path = "test_lib.rs"]
 mod test_lib;
@@ -182,7 +182,7 @@ impl Collect {
     /// Collect data, calling callback with FrameHandler trait to process the returned data
     ///
     /// This routine is called with a pre-created instance.
-    /// 
+    ///
     /// # Example
     ///
     /// ```
